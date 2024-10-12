@@ -6,7 +6,6 @@ var customProxyPort = "2080";     // Порт пользовательского
 var systemProxy = "PROXY";        // Системный прокси (по умолчанию "PROXY")
 var directConnection = "DIRECT";   // Прямое подключение
 
-
 // Настройки для разблокировки сервисов
 var unblockServices = {
     youtube: {
@@ -20,9 +19,7 @@ var unblockServices = {
             "*redirector.googlevideo.com*",
             "*googlevideo.com*"
         ],
-        blockedIPs: [
-            "8.8.8.8", "8.8.4.4"  // Google DNS
-        ]
+        allowedIPs: [] // IP-адреса, которые нужно использовать через прокси
     },
     discord: {
         domains: [
@@ -33,26 +30,37 @@ var unblockServices = {
             "*discordapp.com/api/v*",
             "*discord.gg/invite/*"
         ],
-        blockedIPs: [
-            "1.1.1.1", "1.0.0.1"   // Cloudflare DNS
-        ]
+        allowedIPs: [] // IP-адреса, которые нужно использовать через прокси
     },
     twitter: {
         domains: [
             "twitter.com", "twimg.com", "t.co", "x.com"
         ],
         patterns: [],
-        blockedIPs: [] // Добавьте блокированные IP, если необходимо
+        allowedIPs: [] // IP-адреса, которые нужно использовать через прокси
     },
     facebook: {
         domains: [
             "facebook.com", "fbcdn.net", "fb.com", "messenger.com"
         ],
         patterns: [],
-        blockedIPs: [] // Добавьте блокированные IP, если необходимо
+        allowedIPs: [] // IP-адреса, которые нужно использовать через прокси
+    },
+    chatGpt: {
+        domains: [
+            "chatgpt.com", // Основной домен GPT
+            "api.openai.com" // API домен OpenAI, если необходимо
+        ],
+        patterns: [],
+        allowedIPs: [] // IP-адреса, которые нужно использовать через прокси
     },
     // Можно добавлять другие сервисы здесь
 };
+
+// Запрещенные IP-адреса
+var blockedIPs = [
+    // Добавьте блокированные IP-адреса здесь
+];
 
 // Частные сети, которые всегда идут напрямую
 var privateNet = [
@@ -60,7 +68,6 @@ var privateNet = [
     ["172.16.0.0", "255.240.0.0"],
     ["192.168.0.0", "255.255.0.0"]
 ];
-
 
 // Функция для получения прокси-строки на основе конфигурации
 function getProxyConfig() {
@@ -84,11 +91,19 @@ function isPrivateNetwork(host) {
     return false;
 }
 
-// Проверка на блокированные IP
+// Проверка на заблокированные IP
 function isBlockedIP(host) {
+    if (blockedIPs.indexOf(host) !== -1) {
+        return true;
+    }
+    return false;
+}
+
+// Проверка на разрешенные IP для прокси
+function isAllowedIP(host) {
     for (var service in unblockServices) {
         var serviceData = unblockServices[service];
-        if (serviceData.blockedIPs.indexOf(host) !== -1) {
+        if (serviceData.allowedIPs.indexOf(host) !== -1) {
             return true;
         }
     }
@@ -126,8 +141,13 @@ function FindProxyForURL(url, host) {
         return directConnection;
     }
 
-    // Проверка на блокированные IP
+    // Проверка на заблокированные IP
     if (isBlockedIP(host)) {
+        return directConnection; // Прямое соединение для заблокированных IP
+    }
+
+    // Проверка на разрешенные IP для прокси
+    if (isAllowedIP(host)) {
         return proxy;
     }
 
