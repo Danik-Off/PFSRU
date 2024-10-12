@@ -1,55 +1,141 @@
-function FindProxyForURL(url, host) {
-    // Прокси для Shadowsocks
-    var proxy = "SOCKS5 127.0.0.1:2080";  // Замените на ваш IP и порт Shadowsocks
-    var direct = "DIRECT";  // Прямое соединение
+// Конфигурация прокси-сервера
+var useCustomProxy = true;        // true - использовать пользовательский прокси, false - системный прокси
+var customProxyType = "SOCKS5";   // Тип прокси (например, "HTTP", "SOCKS5")
+var customProxyIP = "127.0.0.1";  // IP-адрес пользовательского прокси
+var customProxyPort = "2080";     // Порт пользовательского прокси
+var systemProxy = "PROXY";        // Системный прокси (по умолчанию "PROXY")
+var directConnection = "DIRECT";   // Прямое подключение
 
-    // Список частных сетей
-    var privateNet = [
-        ["10.0.0.0", "255.0.0.0"],
-        ["172.16.0.0", "255.240.0.0"],
-        ["192.168.0.0", "255.255.0.0"]
-    ];
 
-    // Регулярное выражение для IPv4 адресов
+// Настройки для разблокировки сервисов
+var unblockServices = {
+    youtube: {
+        domains: [
+            "youtube.com", "ytimg.com", "youtu.be"
+        ],
+        patterns: [
+            "*youtube.com/get_video_info*",
+            "*youtube.com/api/timedtext*",
+            "*youtube.com/watch*",
+            "*redirector.googlevideo.com*",
+            "*googlevideo.com*"
+        ],
+        blockedIPs: [
+            "8.8.8.8", "8.8.4.4"  // Google DNS
+        ]
+    },
+    discord: {
+        domains: [
+            "discord.com", "discordapp.com"
+        ],
+        patterns: [
+            "*discord.com/api/v*",
+            "*discordapp.com/api/v*",
+            "*discord.gg/invite/*"
+        ],
+        blockedIPs: [
+            "1.1.1.1", "1.0.0.1"   // Cloudflare DNS
+        ]
+    },
+    twitter: {
+        domains: [
+            "twitter.com", "twimg.com", "t.co", "x.com"
+        ],
+        patterns: [],
+        blockedIPs: [] // Добавьте блокированные IP, если необходимо
+    },
+    facebook: {
+        domains: [
+            "facebook.com", "fbcdn.net", "fb.com", "messenger.com"
+        ],
+        patterns: [],
+        blockedIPs: [] // Добавьте блокированные IP, если необходимо
+    },
+    // Можно добавлять другие сервисы здесь
+};
+
+// Частные сети, которые всегда идут напрямую
+var privateNet = [
+    ["10.0.0.0", "255.0.0.0"],
+    ["172.16.0.0", "255.240.0.0"],
+    ["192.168.0.0", "255.255.0.0"]
+];
+
+
+// Функция для получения прокси-строки на основе конфигурации
+function getProxyConfig() {
+    if (useCustomProxy) {
+        return customProxyType + " " + customProxyIP + ":" + customProxyPort;
+    } else {
+        return systemProxy;
+    }
+}
+
+// Проверка на частные сети
+function isPrivateNetwork(host) {
     var ip4Re = /^(\d{1,3}\.){3}\d{1,3}$/;
-
-    // Проверка на частные сети
     if (host.match(ip4Re)) {
         for (var i = 0; i < privateNet.length; i++) {
             if (isInNet(host, privateNet[i][0], privateNet[i][1])) {
-                return direct;
+                return true;
             }
         }
     }
+    return false;
+}
 
-    // Список доменов для Shadowsocks
-    var shadowsocksDomains = [
-        "twitter.com", "twimg.com", "t.co", "x.com",                   // Twitter/X
-        "facebook.com", "fbcdn.net", "fb.com", "messenger.com",        // Facebook и Messenger
-        "instagram.com", "cdninstagram.com",                           // Instagram
-        "youtube.com", "ytimg.com", "youtu.be",                        // YouTube
-        "googleapis.com", "gstatic.com", "l.google.com", 
-        "ggpht.com", "googleusercontent.com", "redirector.googlevideo.com",  // Google сервисы
-        "openai.com", "chatgpt.com"                                    // ChatGPT и OpenAI
-    ];
-
-    // Проверка доменов из списка
-    for (var i = 0; i < shadowsocksDomains.length; i++) {
-        // Учитываем основной домен и поддомены
-        if (dnsDomainIs(host, shadowsocksDomains[i]) || shExpMatch(host, "*." + shadowsocksDomains[i])) {
-            return proxy;
+// Проверка на блокированные IP
+function isBlockedIP(host) {
+    for (var service in unblockServices) {
+        var serviceData = unblockServices[service];
+        if (serviceData.blockedIPs.indexOf(host) !== -1) {
+            return true;
         }
     }
+    return false;
+}
 
-    // Дополнительные проверки для загрузки видео
-    if (shExpMatch(url, "*youtube.com/get_video_info*") || 
-        shExpMatch(url, "*youtube.com/api/timedtext*") || 
-        shExpMatch(url, "*youtube.com/watch*") || 
-        shExpMatch(url, "*redirector.googlevideo.com*") || 
-        shExpMatch(url, "*googlevideo.com*")) {
+// Проверка доменов и шаблонов
+function matchesServicePatterns(url, host) {
+    for (var service in unblockServices) {
+        var serviceData = unblockServices[service];
+        
+        // Проверка доменов
+        for (var i = 0; i < serviceData.domains.length; i++) {
+            if (dnsDomainIs(host, serviceData.domains[i]) || shExpMatch(host, "*." + serviceData.domains[i])) {
+                return true;
+            }
+        }
+        
+        // Проверка URL-шаблонов
+        for (var j = 0; j < serviceData.patterns.length; j++) {
+            if (shExpMatch(url, serviceData.patterns[j])) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Основная функция для определения прокси
+function FindProxyForURL(url, host) {
+    var proxy = getProxyConfig();  // Получаем конфигурацию прокси
+
+    // Проверка на частные сети
+    if (isPrivateNetwork(host)) {
+        return directConnection;
+    }
+
+    // Проверка на блокированные IP
+    if (isBlockedIP(host)) {
+        return proxy;
+    }
+
+    // Проверка доменов и шаблонов
+    if (matchesServicePatterns(url, host)) {
         return proxy;
     }
 
     // Если ни одно условие не подошло - прямое соединение
-    return direct;
+    return directConnection;
 }
