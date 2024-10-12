@@ -22,16 +22,15 @@ var unblockServices = {
         allowedIPs: [] // IP-адреса, которые нужно использовать через прокси
     },
     discord: {
-        domains: [
-            "discord.com", "discordapp.com"
+    domains: [
+    ],
+    patterns: [
+            "*discord*",  // Шаблон для всех случаев, где есть слово "discord"
+            "*dis.gd*"    // Шаблон для конкретного домена
         ],
-        patterns: [
-            "*discord.com/api/v*",
-            "*discordapp.com/api/v*",
-            "*discord.gg/invite/*"
-        ],
-        allowedIPs: [] // IP-адреса, которые нужно использовать через прокси
-    },
+    allowedIPs: [] // IP-адреса, которые нужно использовать через прокси
+}
+,
     twitter: {
         domains: [
             "twitter.com", "twimg.com", "t.co", "x.com"
